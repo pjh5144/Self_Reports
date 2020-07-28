@@ -28,6 +28,11 @@ summary(cars)
 ##  Max.   :25.0   Max.   :120.00
 ```
 
+```r
+data(pressure)
+library(ggplot2)
+```
+
 ## Including Plots
 
 You can also embed plots, for example:
