@@ -37,6 +37,11 @@ library(ggplot2)
 
 You can also embed plots, for example:
 
+
+```r
+ggplot(pressure,aes(x=temperature,y=pressure))
+```
+
 ![](Test_files/figure-html/pressure-1.png)<!-- -->
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
