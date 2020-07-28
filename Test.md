@@ -42,6 +42,6 @@ You can also embed plots, for example:
 ggplot(pressure,aes(x=temperature,y=pressure))
 ```
 
-![](Test_files/figure-html/pressure-1.png)<!-- -->
+![](Test_files/figure-html/unnamed-chunk-1-1.png)<!-- -->
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
