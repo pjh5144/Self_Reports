@@ -1,0 +1,1952 @@
+---
+title: "Self Reports"
+author: "Awais Farooq"
+date: "4/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(dplyr)
+library(ggpubr)
+library(kableExtra)
+library(Hmisc)
+library(ggpubr)
+library(corrplot)
+library(rstatix)
+library(anytime)
+library(psych)
+library(sjPlot)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+memory.limit(120000)
+
+#Load data sets
+bhdp<-data.frame(data.table::fread("DEID_BHDP_TBI_Surveys.csv"))
+
+bhdp<-as.data.frame(bhdp)
+
+bhdp%>%
+  select(grep("NSI",names(.)))
+
+test<-bhdp%>%
+  mutate(date=lubridate::ymd_hms(start_date))%>%
+  select(date,start_date)%>%
+  head()
+
+test<-bhdp%>%
+  filter(!is.na('NSI:Balance_V1'))%>%
+  mutate(date=lubridate::ymd_hms(start_date))%>%
+  group_by(SubjectID,date)%>%
+  summarise(n=n())%>%
+  filter(n>1)
+
+#Check the number of occurrences 
+
+
+bhdp%>%
+  filter(SubjectID==398056978440)%>%
+  View()
+
+
+bhdp <- read.csv("DEID_BHDP_TBI_Surveys.csv", header = TRUE, sep= ",")
+
+bamc <- read.csv("BAMC_NSIComp_Manip.csv", header =  TRUE, sep = ",")
+
+nicoe <- read.csv("NICOE_data_limitedCols_DEID.csv", header = TRUE, sep = ",")
+
+#Rename Column for proper merging later between data sets
+names(nicoe)[2] <- "parent_dmis_key_name"
+
+demo <- read.csv("ANDE_PT_demo_03032020.csv", header = TRUE, sep = ",")
+
+#Delete uncessary column
+bhdp$NSI.GuidanceText_V1 <- NULL
+
+
+#Transform necessary columns into numeric values
+bhdp[,1:139] <- sapply(bhdp[,1:139],as.character)
+bhdp[,1:139] <- sapply(bhdp[,1:139],as.numeric)
+
+#Set outliar values of "888" as NA
+bhdp[ bhdp == 888 ] <- NA
+
+#Calculate HIT6 total score
+bhdp<- bhdp %>%
+  mutate(HIT6_Score = select(., 24:29) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,24:29])))%>%
+  select(HIT6_Score, everything())
+
+#Calcuate PHQ9 Total Score
+bhdp<- bhdp %>%
+  mutate(PHQ9_Score = select(., 31:39) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,31:39])))%>%
+  select(PHQ9_Score, everything())
+
+#Calcuate Audit Total Score
+bhdp<- bhdp%>%
+  mutate(AUDIT_Score = select(., 49:58) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,49:58])))%>%
+  select(AUDIT_Score, everything())
+
+
+#Calcuate ISI Total Score
+bhdp<- bhdp%>%
+  mutate(ISI_Score = select(., 85:91) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,85:91])))%>%
+  select(ISI_Score, everything())
+
+
+#Calcuate GAD Total Score
+bhdp<- bhdp%>%
+  mutate(GAD_Score = select(., 93:99) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,93:99])))%>%
+  select(GAD_Score, everything())
+
+#Calcuate PCL5 Total Score
+
+bhdp<- bhdp%>%
+  mutate(pcl520_tot_score = select(., 101:122) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,101:122])))%>%
+  select(pcl520_tot_score, everything())
+
+
+#Calculate NSI vestibular
+bhdp<- bhdp %>%
+  mutate(NSI_F1_Vestibular = select(., c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')) %>% rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')])))%>%
+  select(NSI_F1_Vestibular, everything())
+
+#Calculate NSI Cognative
+bhdp<- bhdp %>%
+  mutate(NSI_F2_Cognative = select(., c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')])))%>%
+  select(NSI_F2_Cognative, everything())    
+
+
+
+#Calculate NSI Affective
+bhdp<- bhdp %>%
+  mutate(NSI_F3_Affective = select(., c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')])))%>%
+  select(NSI_F3_Affective, everything()) 
+
+
+
+#Calculate NSI Sensory
+bhdp<- bhdp %>%
+  mutate(NSI_F4_Sensory = select(., c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')])))%>%
+  select(NSI_F4_Sensory, everything())  
+
+
+#Calculate NSI Validity
+
+bhdp<- bhdp %>%
+  mutate(NSI_Validity_10 = select(., c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')) %>% 
+           rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')])))%>%
+  select(NSI_Validity_10, everything())  
+
+
+
+#Calculate NSI total
+bhdp<- bhdp %>%
+  mutate(NSI_TotalScore = select(., 12:33) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,12:33])))%>%
+  select(NSI_TotalScore, everything())
+
+
+##rename IDs for other dataframes
+
+names(bamc)[9] <- "SubjectID"
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Set total scores provided by NICOE data source as null and recalculate manually
+nicoe$abc_tot_score <- NULL
+nicoe$dhi_tot_score<- NULL
+nicoe$epworth_tot_score<- NULL
+nicoe$GAD_Score<- NULL
+nicoe$HIT6_Score<- NULL
+nicoe$NSI_TotalScore<- NULL
+nicoe$NSI_Validity_10<- NULL
+nicoe$pcl520_tot_score<- NULL
+nicoe$pclm_tot_score<- NULL
+nicoe$PHQ9_Score<- NULL
+nicoe$PSQI_Score<- NULL
+
+#Set all "888" values as NA in Nicoe data source
+nicoe[ nicoe  == 888 ] <- NA
+
+#Calcuate ABC Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(abc_tot_score = select(., 3:18) %>% rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoe[,3:18])))%>%
+  select(abc_tot_score, everything())
+
+#Calcuate DHI Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(dhi_tot_score = select(., 20:44) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,20:44])))%>%
+  select(dhi_tot_score, everything())
+
+#Calcuate Epworth Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(epworth_tot_score = select(., 46:53) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,46:53])))%>%
+  select(epworth_tot_score, everything())
+
+#Calcuate GAD Total Score for NICOE
+nicoe<- nicoe%>%
+  mutate(GAD_Score = select(., 55:61) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,55:61])))%>%
+  select(GAD_Score, everything())
+
+#Calcuate HIT6 Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(HIT6_Score = select(., 64:69) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,64:69])))%>%
+  select(HIT6_Score, everything())
+
+
+#Calcuate PCL5 Total Score for NICOE
+
+nicoe<- nicoe%>%
+  mutate(pcl520_tot_score = select(., 93:112) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,93:112])))%>%
+  select(pcl520_tot_score, everything())
+
+#Calcuate PCLM Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(pclm_tot_score = select(., 124:140) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,124:140])))%>%
+  select(pclm_tot_score, everything())
+
+
+
+
+
+#Calcuate PHQ9 Total Score for NICOE
+nicoe<- nicoe %>%
+  mutate(PHQ9_Score = select(., 158:166) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,158:166])))%>%
+  select(PHQ9_Score, everything())
+
+
+
+#Calculate NSI vestibular for NICOE
+nicoe<- nicoe %>%
+  mutate(NSI_F1_Vestibular = select(., c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')) %>% rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoe[,c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')])))%>%
+  select(NSI_F1_Vestibular, everything())
+
+
+#Calculate NSI Cognative for NICOE
+nicoe<- nicoe %>%
+  mutate(NSI_F2_Cognative = select(., c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoe[,c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')])))%>%
+  select(NSI_F2_Cognative, everything())    
+
+
+
+#Calculate NSI Affective for NICOE
+nicoe<- nicoe %>%
+  mutate(NSI_F3_Affective = select(., c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoe[,c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')])))%>%
+  select(NSI_F3_Affective, everything()) 
+
+
+
+
+#Calculate NSI Sensory for NICOE
+nicoe<- nicoe %>%
+  mutate(NSI_F4_Sensory = select(., c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoe[,c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')])))%>%
+  select(NSI_F4_Sensory, everything())  
+
+
+#Calculate NSI Validity for NICOE
+
+nicoe<- nicoe %>%
+  mutate(NSI_Validity_10 = select(., c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')) %>% 
+           rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')])))%>%
+  select(NSI_Validity_10, everything())  
+
+
+
+#Calculate NSI total for NICOE
+nicoe<- nicoe %>%
+  mutate(NSI_TotalScore = select(., 79:100) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(nicoe[,79:100])))%>%
+  select(NSI_TotalScore, everything())
+
+
+##Add data source to each dataframe
+
+nicoe$data_source <- "nicoe"
+bhdp$data_source <- "bhdp"
+bamc$data_source <- "bamc"
+
+#Format dates for each data source
+bhdp$start_date <-anydate(bhdp$start_date)
+bamc$start_date <- anydate(bamc$start_date)
+nicoe$start_date <- anydate(nicoe$start_date)
+
+## Rename PCL in BHDP AND NICOE
+
+names(bhdp)[108] <- "PCL.5.Q01.MEMORIES_OF_STRESS_V1"
+names(bhdp)[109] <- "PCL.5.Q02.DREAM_OF_STRESS_V1"
+names(bhdp)[110] <- "PCL.5.Q03.RELIVING_STRESS_V1"
+names(bhdp)[111] <- "PCL.5.Q04.UPSET_V1"
+names(bhdp)[112] <- "PCL.5.Q05.PHYSICAL_REACTION_V1"
+names(bhdp)[113] <- "PCL.5.Q06.AVOID_STRESS_V1"
+names(bhdp)[114] <- "PCL.5.Q07.AVOID_ACTIVITES_V1"
+names(bhdp)[115] <- "PCL.5.Q08.TROUBLE_REMEMBERING_V1"
+names(bhdp)[116] <- "PCL.5.Q09.NEGATIVE_BELIEFS_V1"
+names(bhdp)[117] <- "PCL.5.Q10.BLAMING_V1"
+names(bhdp)[118] <- "PCL.5.Q11.STRONG_NEGATIVE_FEELINGS_V1"
+names(bhdp)[119] <- "PCL.5.Q12.LOSS_OF_INTEREST_V1"
+names(bhdp)[120] <- "PCL.5.Q13.FEEL_DISTANT_V1"
+names(bhdp)[121] <- "PCL.5.Q14.TROUBLE_EXPERIENCING_POSITIVE_FEELINGS_V1"
+names(bhdp)[122] <- "PCL.5.Q15.IRRITABLE_V1"
+names(bhdp)[123] <- "PCL.5.Q16.TAKING_RISKS_V1"
+names(bhdp)[124] <- "PCL.5.Q17.ON_GUARD_V1"
+names(bhdp)[125] <- "PCL.5.Q18.JUMPY_V1"
+names(bhdp)[126] <- "PCL.5.Q19.CONCENTRATION_V1"
+names(bhdp)[127] <- "PCL.5.Q20.DIFFICULTY_SLEEPING_V1"
+
+
+
+names(nicoe)[102] <- "PCL.5.Q01.MEMORIES_OF_STRESS_V1"
+names(nicoe)[103] <- "PCL.5.Q02.DREAM_OF_STRESS_V1"
+names(nicoe)[104] <- "PCL.5.Q03.RELIVING_STRESS_V1"
+names(nicoe)[105] <- "PCL.5.Q04.UPSET_V1"
+names(nicoe)[106] <- "PCL.5.Q05.PHYSICAL_REACTION_V1"
+names(nicoe)[107] <- "PCL.5.Q06.AVOID_STRESS_V1"
+names(nicoe)[108] <- "PCL.5.Q07.AVOID_ACTIVITES_V1"
+names(nicoe)[109] <- "PCL.5.Q08.TROUBLE_REMEMBERING_V1"
+names(nicoe)[110] <- "PCL.5.Q09.NEGATIVE_BELIEFS_V1"
+names(nicoe)[111] <- "PCL.5.Q10.BLAMING_V1"
+names(nicoe)[112] <- "PCL.5.Q11.STRONG_NEGATIVE_FEELINGS_V1"
+names(nicoe)[113] <- "PCL.5.Q12.LOSS_OF_INTEREST_V1"
+names(nicoe)[114] <- "PCL.5.Q13.FEEL_DISTANT_V1"
+names(nicoe)[115] <- "PCL.5.Q14.TROUBLE_EXPERIENCING_POSITIVE_FEELINGS_V1"
+names(nicoe)[116] <- "PCL.5.Q15.IRRITABLE_V1"
+names(nicoe)[117] <- "PCL.5.Q16.TAKING_RISKS_V1"
+names(nicoe)[118] <- "PCL.5.Q17.ON_GUARD_V1"
+names(nicoe)[119] <- "PCL.5.Q18.JUMPY_V1"
+names(nicoe)[120] <- "PCL.5.Q19.CONCENTRATION_V1"
+names(nicoe)[121] <- "PCL.5.Q20.DIFFICULTY_SLEEPING_V1"
+
+
+
+# CREATE UNFILTERED MASTER datbase
+
+#Merge bhdp and nicoe
+master_nicoe_bhdp <-merge(bhdp, nicoe, all = TRUE)
+
+#Merge BHDP/Nicoe with BAMC
+master_set <- merge(master_nicoe_bhdp, bamc, all= TRUE)
+
+#Set NSI validity score cutoff
+master_set$NSI_Validity_10[ master_set$NSI_Validity_10 > 21 ] <- NA
+
+#Set NSI total score Cutoff
+master_set$NSI_TotalScore[master_set$NSI_TotalScore > 88] <- NA
+
+#Turn any remaining "888" into NA
+master_set[ master_set  == 888 ] <- NA
+
+## APPEND WHOQOL
+
+library(plyr)
+
+#RECODE SELECT QOL COLUMNS TO CORRECT SCORNG FORMAT
+
+master_set$QOL.Pain_Limitations_V1 <- as.numeric(revalue(as.character(master_set$QOL.Pain_Limitations_V1), c("1" = "5", "2" = "4", "3"="3", "4"="2", "5"="1")))
+
+master_set$QOL.Medical_Treatment_V1 <- as.numeric(revalue(as.character(master_set$QOL.Medical_Treatment_V1), c("1" = "5", "2" = "4", "3"="3", "4"="2", "5"="1")))
+
+master_set$QOL.Negative_Feelings_Frequency_V1 <- as.numeric(revalue(as.character(master_set$QOL.Negative_Feelings_Frequency_V1), c("1" = "5", "2" = "4", "3"="3", "4"="2", "5"="1")))
+
+#Calculate QOL Physical_Health for Master Set
+master_set<- master_set %>%
+  mutate(qol.d1 = select(., c('QOL.Pain_Limitations_V1','QOL.Medical_Treatment_V1','QOLL.Energy_Level_V1','QOL.Mobility_V1','QOL.Sleep_Satisfaction_V1','QOL.Work_Capacity_Satisfaction_V1','QOL.Daily_Activities_Satisfaction_V1'))%>% 
+              rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(master_set[,c('QOL.Pain_Limitations_V1','QOL.Medical_Treatment_V1','QOLL.Energy_Level_V1','QOL.Mobility_V1','QOL.Sleep_Satisfaction_V1','QOL.Work_Capacity_Satisfaction_V1','QOL.Daily_Activities_Satisfaction_V1')])))%>%
+  mutate(qol_physical_health= (qol.d1*4))
+
+#Calculate QOL Pyschological For Master Set
+  master_set<- master_set %>%
+  mutate(qol.d2 = select(., c('QOL.Life_Enjoyment_V1','QOL.Meaningful_Life_V1','QOL.Concentration_V1','QOL.Accept_Bodily_Appearance_V1', 'QOL.Negative_Feelings_Frequency_V1','QOL.Ability_Satisfaction_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(master_set[,c('QOL.Life_Enjoyment_V1','QOL.Meaningful_Life_V1','QOL.Concentration_V1','QOL.Accept_Bodily_Appearance_V1', 'QOL.Negative_Feelings_Frequency_V1','QOL.Ability_Satisfaction_V1')])))%>%
+  mutate(qol_psychological= (qol.d2*4))
+
+#Calculate QOL Social_Relations For Master Set
+master_set<- master_set %>%
+  mutate(qol.d3 = select(., c('QOL.Relationship_Satisfaction_V1','QOL.Sex_Life_Satisfaction_V1','QOL.Friend_Satisfaction_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(master_set[,c('QOL.Relationship_Satisfaction_V1','QOL.Sex_Life_Satisfaction_V1','QOL.Friend_Satisfaction_V1')])))%>%
+  mutate(qol_social_relations= (qol.d3*4))
+
+
+#Calculate QOL Enviornment For Master Set
+master_set<- master_set %>%
+  mutate(qol.d4 = select(., c('QOL.Feel_Safe_V1','QOL.Healthy_Physcial_Environmnet_V1','QOL.Money_to_Meet_Needs_V1','QOL.Information_to_Meet_Needs_V1','QOL.Leisure_Activities_Opportunity_V1','QOL.Living_Condition_Satisfaction_V1','QOL.Health_Service_Access_V1','QOL.Transporation_Satisfaction_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(master_set[,c('QOL.Feel_Safe_V1','QOL.Healthy_Physcial_Environmnet_V1','QOL.Money_to_Meet_Needs_V1','QOL.Information_to_Meet_Needs_V1','QOL.Leisure_Activities_Opportunity_V1','QOL.Living_Condition_Satisfaction_V1','QOL.Health_Service_Access_V1','QOL.Transporation_Satisfaction_V1')])))%>%
+  mutate(qol_enviornment=(qol.d4*4))
+
+
+#Calculate Number of QOL questions answered, which is needed for a valid QOL total Score.
+master_set<- master_set %>%
+ mutate(qol_q_count =  (rowSums(!is.na(master_set[,c( 134:159)]), na.rm = TRUE)))
+
+#Calculate QOL TOTAL for Master Set  
+master_set<- master_set %>%
+  mutate(qol_total = select(., c('qol_physical_health','qol_psychological', 'qol_social_relations', 'qol_enviornment')) %>%
+           rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(master_set[,c('qol_physical_health','qol_psychological', 'qol_social_relations', 'qol_enviornment')])))
+ 
+master_set$qol_total[master_set$qol_q_count<22] <- NA
+ 
+
+
+#apply cut off scores for each survey in the Master Set
+master_set$NSI_TotalScore[master_set$NSI_TotalScore<0 | master_set$NSI_TotalScore>88] <- NA
+master_set$HIT6_Score[master_set$HIT6_Score<36 | master_set$HIT6_Score>78] <- NA
+master_set$PHQ9_Score[master_set$PHQ9_Score<0 | master_set$PHQ9_Score>27] <- NA
+master_set$ISI_Score[master_set$ISI_Score<0 | master_set$ISI_Score>28] <- NA
+master_set$GAD_Score[master_set$GAD_Score<0 | master_set$GAD_Score>10] <- NA
+master_set$AUDIT_Score[master_set$AUDIT_Score<0 | master_set$AUDIT_Score>40] <- NA
+master_set$abc_tot_score[master_set$abc_tot_score<0 | master_set$abc_tot_score>100] <- NA
+master_set$dhi_tot_score[master_set$dhi_tot_score<0 | master_set$dhi_tot_score>100] <- NA    
+master_set$epworth_tot_score[master_set$epworth_tot_score<0 | master_set$epworth_tot_score>24] <- NA    
+master_set$pcl520_tot_score[master_set$pcl520_tot_score<0 | master_set$pcl520_tot_score>80] <- NA
+master_set$pclm_tot_score[master_set$pclm_tot_score<17 | master_set$pclm_tot_score>85] <- NA
+master_set$qol_total[master_set$qol_total<0 | master_set$qol_total>100] <- NA
+
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create Total Score Categories for each survey in Mast Set
+
+#NSI SCORE CATEGORY
+master_set$NSI_Score_Categories<- cut(master_set$NSI_TotalScore,
+                                       breaks= c(-.00001, 0.00000, 4.9999, 10000),
+                                       labels= c("Same", "Worse", "Clinically Worse"))
+
+
+
+
+#PHQ9 SCORE CATEGORIES
+master_set$PHQ9_Score_Categories<- cut(master_set$PHQ9_Score,
+    breaks= c(-1, 4.1, 9.1, 14.1, 19.1, 27.1),
+    labels= c("None", "Mild", "Moderate", "Moderately Severe", "Severe"))
+
+
+
+
+#EPWORTH SCORE CATEGORY
+master_set$EPWORTH_Score_Categories<- cut(master_set$epworth_tot_score,
+                                      breaks= c(-.00001, 5.0001, 10.0001, 12.001, 15.0001, 10000),
+                                      labels= c("Lower Normal Daytime Sleepiness", "Higher Normal Daytime Sleepiness", "Mild Excessive Daytime Sleepiness", "Moderate Excessive Daytime Sleepiness", "Severe Excessive Daytime Sleepiness"))
+
+
+
+
+#DHI SCORE CATEGORY
+master_set$DHI_Score_Categories<- cut(master_set$dhi_tot_score,
+                                          breaks= c(-.00001, 15.99, 34.0001, 52, 10000 ),
+                                          labels= c("None", "Mild Handicap", "Moderate Handicap", "Severe Handicap"))
+
+
+
+
+
+#PCLM SCORE CATEGORY
+master_set$PCLM_Score_Categories<- cut(master_set$pclm_tot_score,
+                                      breaks= c(-.00001, 0.00000, 9.9999, 10000),
+                                      labels= c("Same", "Worse", "Clinically Worse"))
+
+
+
+
+
+#AUDIT SCORE CATEGORY
+master_set$AUDIT_Score_Categories<- cut(master_set$AUDIT_Score,
+                                       breaks= c(-.00001, 0.00000, 2.9999, 10000),
+                                       labels= c("Same", "Worse", "Clinically Worse"))
+
+
+
+
+#ABC SCORE CATEGORY
+master_set$ABC_Score_Categories<- cut(master_set$abc_tot_score,
+                                        breaks= c(-.00001, 0.00000, 19.9999, 10000),
+                                        labels= c("Same", "Better", "Clinically Clinically"))
+
+
+
+
+#GAD7 SCORE CATEGORY
+master_set$GAD7_Score_Categories<- cut(master_set$GAD_Score,
+                                        breaks= c(-.00001, 0.00000, 4.9999, 10000),
+                                        labels= c("Same", "Worse", "Clinically Worse"))
+
+
+
+
+
+#HIT6 SCORE CATEGORY
+master_set$HIT6_Score_Categories<- cut(master_set$HIT6_Score,
+                                       breaks= c(-.00001, 49.000001, 55.00001, 59.0001, 1000000),
+                                       labels= c("Little Impact", "Some Impact", "Substantial Impact", "Very Severe Impact"))
+
+
+
+
+
+#PHQ8 SCORE CATEGORY
+master_set$PHQ8_Score_Categories<- cut(master_set$phq8_tot_score,
+                                       breaks= c(-.00001, 0.00000, 4.9999, 10000),
+                                       labels= c("Same", "Worse", "Clinically Worse"))
+
+
+
+
+
+#ISI SCORE CATEGORY
+master_set$ISI_Score_Categories<- cut(master_set$ISI_Score,
+                                       breaks= c(-.00001, 7.00001, 14.0009, 21.001, 100000),
+                                       labels= c("No Clinicaly Sig. Insomnia", "Subthreshold Insomnia", "Clinical Insomnia(Moderate", "Clinical Insomnia(Severe"))
+
+
+
+
+
+#PCL5 SCORE CATEGORY
+master_set$PCL5_Score_Categories<- cut(master_set$pcl520_tot_score,
+                                       breaks= c(-.00001, 0.00000, 32, 10000),
+                                       labels= c("Same", "SubThreshold PTSD", "Probable PTSD"))
+
+
+```
+
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+ 
+
+#Create a filtered master set without corresponding NSI's
+master_set_valid_filter <-master_set%>%drop_na(NSI_TotalScore)
+
+#Generate matrix of Correlation, Counts and P Values from selected total scores in the filtered master set  
+  residuals <-  rcorr(as.matrix(master_set_valid_filter[,c(1:6, 7:8, 14:17, 258, 104:105, 164:165, 293 )]), type = "pearson")
+
+  
+#Create data frame with total scores to be used for creating plots and p value table  
+  master_matrix <-  master_set_valid_filter[,c(1:6, 7:8, 14:17, 258, 104:105, 164:165, 293 )]
+  
+  
+  
+  
+#Rename Demographic Variables in demographic database
+
+#race
+
+demo$Race[demo$Race == 'C'] <- 'Caucasian'
+demo$Race[demo$Race == 'M'] <- 'Asian'
+demo$Race[demo$Race == 'N'] <- 'African American'
+demo$Race[demo$Race == 'R'] <- 'Native American/Pacific Islander'
+demo$Race[demo$Race=="X"] <- "Other"
+demo$Race[demo$Race=="Z"] <- "Other"
+demo$Race[demo$Race==""] <- "Other"
+
+# SponsorService
+demo$SponServAgg[demo$SponServAgg == 'A'] <- 'Army'
+demo$SponServAgg[demo$SponServAgg == 'C'] <- 'Coast Guard'
+demo$SponServAgg[demo$SponServAgg == 'F'] <- 'Air Force'
+demo$SponServAgg[demo$SponServAgg == 'M'] <- 'Marine'
+demo$SponServAgg[demo$SponServAgg == 'N'] <- 'Navy'
+demo$SponServAgg[demo$SponServAgg == 'X'] <- 'Unknown'
+
+
+
+# Marital Status
+demo$Marital_Stat[demo$Marital_Stat == ''] <- 'Other'
+demo$Marital_Stat[demo$Marital_Stat == 'D'] <- 'Divorced'
+  demo$Marital_Stat[demo$Marital_Stat == 'M'] <- 'Married'
+  demo$Marital_Stat[demo$Marital_Stat == 'S'] <-  'Single'
+  demo$Marital_Stat[demo$Marital_Stat == 'W'] <- 'Widow'
+  demo$Marital_Stat[demo$Marital_Stat == 'A'] <- 'Anulled'
+  demo$Marital_Stat[demo$Marital_Stat == 'I'] <- 'Interlocutory'
+  demo$Marital_Stat[demo$Marital_Stat == 'L'] <- 'Legally Seperated'
+  demo$Marital_Stat[demo$Marital_Stat == 'Z'] <- 'Unkown'
+
+```
+
+**Patient self-reports are a method in which investigators can gather health related information from a Patient’s perspective in regards to their perceived health care status and pertinent social determinants of health. Patient self-reports can provide vital insights in the quality and trends of care a patient receives. With this paradigm established we can begin to describe the scope and approach of this analysis. Patient self reports in the military health care system allow for the aggregation and analysis of a wide variety of patient symptoms. In patients diagnosed with TBI, a plethora of comorbid neuropsychiatric issues can arrise. An extensive amount of patient self reported from three data sources shall be compiled in this analyss and analyzed.**  
+
+**The Behavioral Health Data Portal (BHDP) misson statement can be summarized as; Improving behavioral health clincal care and risk tracking via standardized data collection disseminated in real time for provioder viewership, supporting evidence based practices and outcomes data for clinical practice, and simplication of data sources via integration of relavent data sources across the Army Medical department. Multiple standardized survey assements were administered to Service Memebers(SMs) in this analyis from March 10th 2009 to August 6th 2019. In total 13 total Survey types have been gathered from various data sources. Data pulls occured from the BHDP dataset which contains almost 747,000 observations, BAMC which contains 5143 observations and NICOE which contained 8562 observations. For the purposes of this analysis, the Neurobehavioral Symptom Inventory (NSI) will be utilized a primary measure of correspondance to other Self reported assessments.**
+
+**Certain considerations are to be made when analyzing survey data. Cut scores are applied to all data to filter surveys that deemed to be clinically inacurate. An example of this would be filtering out surveys with a NSI Validity 10 score of 22 or more. **  
+
+
+## Surveys{.tabset .tabset-fade .tabset-pills}
+
+### NSI Counts
+
+**Given that our key parameter in this analysis is how various Surveys correlate against NSI, our first analysis begins with counting the number of possible NSI surveys from our three data sources. A key point to highlight here is the nature of the data being derived from each source. BHDP and NICOE provide individual question answers for the vast majority of their surveys. BAMC provides only total scores from surveys and one field of 22 question from the actual NSI survey. The counts for NSI total score are filtered by "cut" scores. This same approach is applied to all surveys tabulated in this analysis hence forth.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in NSI answered per Data Source
+
+knitr::kable(t(master_set[,c(1:6, 9, 13, 18:38)] %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "NSI Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**The table below illustrates the break down of how many question were answered for each NSI question. The majority of question answered are 22, with over 11,000 surveys shown to be completed. The numbers taper down until they reach "1". The reason about 4900 surveys have only "one" question answered here is because from BAMC, an exact amount of answeres are given for the field regarding NSI Headaches. The total score for BAMC may still be derived from other question columns not provided in this dataset. "0" question answered here occurs when there is a total score from a database, but no corresponding columns of questions totaling that total score. In this case there is one instance of this. This only shows up for certain Survey Questions is usually due to BAMC not having the same level of detail as other data sources.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the number of NSI survey questions completed
+
+knitr::kable(master_set[,c(1, 18:38, 9)]%>%
+               mutate(NSI_Questions_Complete =  (rowSums(!is.na(master_set[,c(18:38, 9)]))))%>%
+               filter(NSI_TotalScore != "NA")%>%
+               select( 2:24)%>% 
+               group_by(NSI_Questions_Complete)%>%
+               dplyr::summarise(count= n())%>% 
+               adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns(), caption = "NSI Survey Question counts", digits = 3)%>%
+  kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+
+### HIT6 Counts
+
+**Below we have similar counts of HIT6 sources and the amount of questions answered from each individual source. These HIT6 scores are ones that have a corresponding NSI the day of the test. NICOE has the majority of HIT6 scores as the table demonstrates. There is an additonal field in the BHDP data source labled "experiences headaches" which does not exist in the NICOE database and was not found to be part of the official HIT6 quesionnaire, therefore it was not utilized in tabulating total scores.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Count the numer of questions in HIT6 with a corresponding NSI answered per Data Source
+
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!= "NA")%>%
+                 select(, 13, 8,  39:44, 106) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "HIT6 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+**We can see in the table below the majority of survey answered are almost fully complete, with approximately 91% of surveys completed. 712 "Zero" questions answered is due again to BAMC not having any individual fields to show how many of their individual questions have been answered**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 8,  39:44)]%>%
+  mutate(HIT6_Questions_Complete =  (rowSums(!is.na(master_set[,c( 39:44)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore != "NA")%>%
+  filter(HIT6_Score!="NA")%>%
+  select(, 3:9)%>% 
+  group_by(HIT6_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+    adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+   , caption = "HIT6 Survey Question counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### pHQ9
+
+**In this table we see a total of approximately 7600 PHQ9 scores coming from two data sources, NICOE and BHDP. BAMC has no total scores to contribute so we expect no "0" answers in the question count analysis**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in PHQ9 with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 17,  45:53) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "PHQ9 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Encourgagingly we see that the vast majority of surveys have been completed in PHQ9. The second highest total is however for "2" with about 1600 surveys only having 2 fields filled..**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 17,  45:53)]%>%
+  mutate(PHQ9_Questions_Complete =  (rowSums(!is.na(master_set[,c( 45:53)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(PHQ9_Score!="NA")%>%
+  select(, 3:12)%>% 
+  group_by(PHQ9_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns(), caption = "PHQ9 Survey Question counts Subsetted in Corresponding NSI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### pHQ8
+
+**In this table we see a total of approximately 1337 PHQ8 scores coming from only the NICOE.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in PHQ8 with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 258,  250:257) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "PHQ8 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Encourgagingly we see that all of the PHQ8 questions have been completed. **
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 258,  250:257)]%>%
+  mutate(PHQ8_Questions_Complete =  (rowSums(!is.na(master_set[,c( 250:257)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(phq8_tot_score!="NA")%>%
+  select(, 3:11)%>% 
+  group_by(PHQ8_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns(), caption = "PHQ8 Survey Question counts Subsetted in Corresponding NSI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### GAD7
+
+**GAD7 similarly to PHQ9 derives all of its surveys from BHDP and NICOE. The discrepency in the total amount of GAD Total scores to indiviual questions stems from the fact a cut score is applied to GAD Total scores thus lowering the total amount. 5302 GAD total scores are valid the majority coming from NICOE as a data source.** 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in GAD7 with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!= "NA")%>%
+                 select(13, 16,  77:83) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "GAD7 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**In this table we see that almost 70% of GAD7 surveys end up being completed. The second highest number comes from 2 questions completed. This could be postulated from the fact GAD also has a two item screener and those SM who answered only 2 questions did not warrant completion of an entire survey**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 16,  77:83)]%>%
+mutate(GAD7_Questions_Complete =  (rowSums(!is.na(master_set[,c( 77:83)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(GAD_Score!="NA")%>%
+  select(, 3:10)%>% 
+  group_by(GAD7_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+, caption = "GAD7 Survey Question counts Subsetted in Corresponding NSI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### ISI
+
+**ISI is only derived from BHDP in this analysis. Interestingly the total amount of individual scores do not exceed the amount of valid total scores**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in ISI with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 104,  127:133) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "ISI Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**In ISI the majority of questions are completed, but only marginally so with a shade over 50 percent being completed. Almost 35% of surveys only have one answer completed. This may heavily skew the total score in our analysis. 15% of scores have 15% of questions completed as well.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable( master_set[,c(1, 104,  127:133)]%>%
+  mutate(ISI_Questions_Complete =  (rowSums(!is.na(master_set[,c( 127:133)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(ISI_Score!="NA")%>%
+  select(, 3:10)%>% 
+  group_by(ISI_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "ISI Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+
+
+### AUDIT
+
+**Audit in this analysis once again is derived from BHDP. AUDIT in our total score analysis is composed of AUDIT C and the subsequent audit questions. More Audit C questions are answered then the subsequent 7 questions that follow. Interestingly, the amount of audit C questions has notable variability.** 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in ISI with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 105,  115:124) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "AUDIT Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**More so then other surveys so far, there is much more variability in the question count distribution in AUDIT. Three questions answered then any other amount. About 27% of surveys were completed and 26% only had one field filled out. Considerations can be made to filter our surveys with only 1 question answered** 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable( master_set[,c(1, 105,  115:124)]%>%
+  mutate(AUDIT_Questions_Complete =  (rowSums(!is.na(master_set[,c( 115:124)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(AUDIT_Score!="NA")%>%
+  select(, 3:13)%>% 
+  group_by(AUDIT_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "AUDIT Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+### PCL5
+
+**In these initial PCL5 counts we see that the majority of PCL5 total scores are derived from BHDP. BAMC has about 1000 to contribute followed by NICOE at 694** 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in PCL5 with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!= "NA")%>%
+                 select(13, 7,  84:103)%>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "PCL5 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable( master_set[,c(1, 7, 84:103  )]%>%
+  mutate(PCL5_Questions_Complete =  (rowSums(!is.na(master_set[,c(84:103)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(pcl520_tot_score!="NA")%>%
+  select(, 3:23)%>% 
+  group_by(PCL5_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "PCL5 Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+### PCLM
+**PCLM derives its data from BAMC and NICOE. The majority stemming from NICOE. There are relatively consistent survey question answered from the NICOE. The total score is slightly diminished from NICOE because again cut scores render some values null**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in PCLM with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 14, 226:242) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "PCLM Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Predictably we see that 3600 "zero" values get counted due to BAMC not containing any detailed fields for all their survey questions. Nearly 60% of surveys are known for certain to be completed. In this case, nearly 40% are marked Zero, but may very well have had all their question fields answered.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 14, 226:242)]%>%
+  mutate(PCLM_Questions_Complete =  (rowSums(!is.na(master_set[,c( 226:242)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(pclm_tot_score!="NA")%>%
+  select(, 3:20)%>% 
+  group_by(PCLM_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns(), caption = "PCLM Survey Question counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+### ABC
+
+**In analyzing ABC we see that all the questions derive from NICOE and homogenously answered througout**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in ABC with a corresponding NSI answered per Data Source
+
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 165,  166:181) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "ABC Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Because of the consistency in the amount of ABC questions answered we see that all survey questions are answered and completed here**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 165,  166:181)]%>%
+  mutate(ABC_Questions_Complete =  (rowSums(!is.na(master_set[,c( 166:181)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(abc_tot_score!="NA")%>%
+  select(, 3:19)%>% 
+  group_by(ABC_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns() , caption = "ABC Survey Question Counts Subsetted in Corresponding NSI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### DHI
+
+**DHI follows a similar trend to ABC above in that it is entirely from the NICOE and for the most part answered consistently throughout**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in DHI with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 15,  182:206) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "DHI Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Save for three surveys this table illustrates that all DHI surveys were completed**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable( master_set[,c(1, 15,  182:206)]%>%
+  mutate(DHI_Questions_Complete =  (rowSums(!is.na(master_set[,c( 182:206)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(dhi_tot_score!="NA")%>%
+  select(, 3:28)%>% 
+  group_by(DHI_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "DHI Survey Question counts with Corresponding NSI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### Epworth
+
+**Continuing to EPWORTH we see again that all surveys here are derived from NICOE and answered homogenously**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in EPWORTH with a corresponding NSI answered per Data Source
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 164,  207:214) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "Epworth Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 164,  207:214)]%>%
+  mutate(EPWORTH_Questions_Complete =  (rowSums(!is.na(master_set[,c( 207:214)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(epworth_tot_score!="NA")%>%
+  select(, 3:11)%>% 
+  group_by(EPWORTH_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "Epworth Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### QOL
+
+**Here we see that valid QOL are being pulled entirely from BHDP with some variation in the amount of questions answered**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Count the numer of questions in QOL with a corresponding NSI answered per Data Source
+
+knitr::kable(t(master_set%>%
+                 filter(NSI_TotalScore!="NA")%>%
+                 select(13, 293,  134:159) %>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    adorn_totals("row")), caption = "QOL Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Encouragingly we see that the vast majority of WHOQOL surveys have been completed. For the purposes of this survey, scores were generated by only allowing in surveys that had 22 or more questions answered as per instructions derived from WHO to make total scores.**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(master_set[,c(1, 293,  134:159)]%>%
+  mutate(QOL_Questions_Complete =  (rowSums(!is.na(master_set[,c( 134:159)]), na.rm = TRUE)))%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(qol_total!="NA")%>%
+  select(, 3:29)%>% 
+  group_by(QOL_Questions_Complete)%>%
+  dplyr::summarise(count= n())%>%
+  adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()  , caption = "QOL Survey Question counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### Survey Counts with Corresponding NSI
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Generate table with total amount of total scores answered per data source 
+
+knitr::kable(t(master_set[,c("NSI_TotalScore", "dhi_tot_score", "GAD_Score", "abc_tot_score", "AUDIT_Score", "pcl520_tot_score", "pclm_tot_score", "ISI_Score", "PHQ9_Score", "phq8_tot_score", "HIT6_Score", "epworth_tot_score", "qol_total", "data_source")] %>%
+               filter(NSI_TotalScore != "NA")%>%
+       group_by(data_source)%>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+     adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()), caption = "Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(master_set, mapping = aes(x=start_date))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "time", y="Survey Counts")+
+  ggtitle("Survey Counts over Time between Different Data Sources")
+```
+
+
+
+## Survey Plots{.tabset .tabset-fade .tabset-pills}
+
+### NSI PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=NSI_TotalScore))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source)+
+  labs(x= "NSI TOTAL SCORE", y= "COUNT")+
+  ggtitle("NSI Total Score Distribution Between Data Sources")
+
+
+master_set%>%
+  filter(NSI_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, fill= NSI_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="NSI Total Score", y= "Frequency Count")+
+  ggtitle("NSI Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+```
+
+
+
+### HIT6 PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in HIT6 with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=HIT6_Score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "HIT6 TOTAL SCORE", y= "COUNT")+
+  ggtitle("HIT6 Total Score Distribution Between Data Sources With Corresponding NSI")
+
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(HIT6_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=HIT6_Score, fill= HIT6_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="HIT6 Total Score", y= "Frequency Count")+
+  ggtitle("HIT6 Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+  
+```
+
+### PHQ9 PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in PHQ9 with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=PHQ9_Score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "PHQ9 TOTAL SCORE", y= "COUNT")+
+  ggtitle("PHQ9 Total Score Distribution Between Data Sources")
+
+
+
+master_set%>%
+ filter(PHQ9_Score!= "NA")%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=PHQ9_Score, fill= PHQ9_Score_Categories))+
+  geom_histogram()+
+  labs(x="PHQ9 Score", y= "Frequency Count")+
+  ggtitle("PHQ9 Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+   facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### PHQ8 PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in PHQ8 with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=phq8_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "PHQ8 TOTAL SCORE", y= "COUNT")+
+  ggtitle("PHQ8 Total Score Distribution Between Data Sources")
+
+
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(PHQ8_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=phq8_tot_score, fill= PHQ8_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="PHQ8 Total Score", y= "Frequency Count")+
+  ggtitle("PHQ8 Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### GAD7 PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in GAD7 with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=GAD_Score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "GAD7 TOTAL SCORE", y= "COUNT")+
+  ggtitle("GAD7 Total Score Distribution Between Data Sources")
+
+#Create histogram showing total score distribution in GAD7 with Corresponding NSI Categorized by Clinical Cut Offs
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(GAD7_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=GAD_Score, fill= GAD7_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="GAD7 Total Score", y= "Frequency Count")+
+  ggtitle("GAD7 Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### ISI PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in ISI with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=ISI_Score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "ISI TOTAL SCORE", y= "COUNT")+
+  ggtitle("ISI Total Score Distribution Between Data Sources") 
+
+#Create histogram showing total score distribution in ISI with Corresponding NSI Categorized by Clinical Cut offs
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(ISI_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=ISI_Score, fill= ISI_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="ISI Total Score", y= "Frequency Count")+
+  ggtitle("ISI Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### AUDIT PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Create histogram showing total score distribution in AUDIT with Corresponding NSI
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=AUDIT_Score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "AUDIT TOTAL SCORE", y= "COUNT")+
+  ggtitle("AUDIT Total Score Distribution Between Data Sources")
+
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(AUDIT_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=AUDIT_Score, fill= AUDIT_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="AUDIT Total Score", y= "Frequency Count")+
+  ggtitle("AUDIT Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+```
+
+
+### PCL5 PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=pcl520_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "PCL5 TOTAL SCORE", y= "COUNT")+
+  ggtitle("PCL5 Total Score Distribution Between Data Sources")
+
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(PCL5_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=pcl520_tot_score, fill= PCL5_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="PCL5 Total Score", y= "Frequency Count")+
+  ggtitle("PCL5 Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+```
+
+
+### PCLM PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=pclm_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "PCLM TOTAL SCORE", y= "COUNT")+
+  ggtitle("PCLM Total Score Distribution Between Data Sources")
+
+
+
+master_set%>%
+  filter(PCLM_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=pclm_tot_score, fill= PCLM_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="PCLM Total Score", y= "Frequency Count")+
+  ggtitle("PCLM Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+   facet_wrap(~data_source, scales = "free_y")
+```
+
+
+### ABC PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=abc_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "ABC TOTAL SCORE", y= "COUNT")+
+  ggtitle("ABC Total Score Distribution Between Data Sources")
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+  filter(ABC_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=abc_tot_score, fill= ABC_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="ABC Total Score", y= "Frequency Count")+
+  ggtitle("ABC Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  facet_wrap(~data_source, scales = "free_y")
+
+```
+
+
+### DHI PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot(mapping = aes(x=dhi_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "DHI TOTAL SCORE", y= "COUNT")+
+  ggtitle("DHI Total Score Distribution Between Data Sources")
+
+
+master_set%>%
+  filter(DHI_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=dhi_tot_score, fill= DHI_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="DHI Total Score", y= "Frequency Count")+
+  ggtitle("DHI Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+   facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### EPWORTH PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=epworth_tot_score))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "EPWORTH TOTAL SCORE", y= "COUNT")+
+  ggtitle("EPWORTH Total Score Distribution Between Data Sources")
+
+master_set%>%
+  filter(EPWORTH_Score_Categories!="NA")%>%
+  ggplot(mapping = aes(x=epworth_tot_score, fill= EPWORTH_Score_Categories))+
+  geom_histogram(bins = 50)+
+  labs(x="EPWORTH Total Score", y= "Frequency Count")+
+  ggtitle("EPWORTH Total Score Distribution Categorized by Severity")+
+  theme(legend.position="bottom", legend.box = "horizontal")+
+  guides(fill= guide_legend(nrow = 2))+
+   facet_wrap(~data_source, scales = "free_y")
+
+```
+
+### QOL PLOTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+master_set%>%
+  filter(NSI_TotalScore!="NA")%>%
+ggplot( mapping = aes(x=qol_total))+
+  geom_histogram(fill= "dodgerblue4")+
+  facet_wrap(~data_source, scales = "free_y")+
+  labs(x= "QOL TOTAL SCORE", y= "COUNT")+
+  ggtitle("QOL Total Score Distribution Between Data Sources")
+
+
+
+```
+
+
+## Survey Summaries{.tabset .tabset-fade .tabset-pills}
+
+
+### Survey Summary
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(t(summary(master_set[,c("NSI_TotalScore", "dhi_tot_score", "GAD_Score", "abc_tot_score", "AUDIT_Score", "pcl520_tot_score", "pclm_tot_score", "ISI_Score", "PHQ9_Score", "HIT6_Score", "epworth_tot_score", "qol_total", "data_source")]%>%filter(NSI_TotalScore != "NA")))
+       ,caption = "NSI Survey means", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### NSI Summary
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(t(summary(master_set[,c(1:6, 9, 18:38)]%>%filter(NSI_TotalScore != "NA")))
+       ,caption = "NSI Survey means", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+
+## Correlation Plots{.tabset .tabset-fade .tabset-pills}
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+corstar <- function(x, y = NULL, use = "pairwise", method = "pearson", round = 5, row.labels, col.labels, ...) {
+  
+  require(psych)
+  
+  ct <- corr.test(x, y, use, method)    # calculate correlation
+  r <- ct$r                             # get correlation coefs
+  p <- ct$p                             # get p-values
+  
+  stars <- ifelse(p < .001, "***", ifelse(p < .01, "** ", ifelse(p < .05, "*  ", "   "))) # generate significance stars
+  
+  m <- matrix(NA, nrow = nrow(r) * 2, ncol = ncol(r) + 1) # create empty matrix
+  
+  rlab <- if(missing(row.labels)) rownames(r) else row.labels # add row labels
+  clab <- if(missing(col.labels)) {
+    if(is.null(colnames(r)))
+      deparse(substitute(y))
+    else
+      colnames(r)
+  } else {
+    col.labels # add column labels
+  }
+  
+  rows <- 1:nrow(m)                     # row indices
+  cols <- 2:ncol(m)                     # column indices
+  
+  odd <- rows %% 2 == 1                 # odd rows
+  even <- rows %% 2 == 0                # even rows
+  m[odd, 1] <- rlab                     # add variable names
+  m[even, 1] <- rep("", sum(even))      # add blank
+  
+  m[odd, cols] <- paste(format(round(r, round), nsmall = round, ...), stars, sep = "")     # add r coefs
+  m[even, cols] <- paste("(", format(round(p, round), nsmall = round, ...), ")", sep = "") # add p-values
+  
+  colnames(m) <- c(" ", clab)           # add colnames
+  m                                     # return matrix
+}
+
+
+
+
+```
+
+### Cor Tables
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(residuals$r, caption = "Self Report Correlations", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(residuals$n, caption = "Self Report Correlation Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(corstar(master_matrix), caption = "Self Report Correlation P Values", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### NSI and HIT6
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= HIT6_Score, fill= NSI_F2_Cognative))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="HIT6 Score")+
+  ggtitle("Correlation Between NSI Total, HIT6 Total and NSI Cognative")
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= HIT6_Score, fill= NSI_F1_Vestibular))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="HIT6 Score")+
+  ggtitle("Correlation Between NSI Total, HIT6 Total and NSI Vestibular")
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= HIT6_Score, fill= NSI_F4_Sensory))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="HIT6 Score")+
+  ggtitle("Correlation Between NSI Total, HIT6 Total and NSI Sensory")
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= HIT6_Score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="HIT6 Score")+
+  ggtitle("Correlation Between NSI Total, HIT6 Total and NSI Affective")
+```
+
+```{r, results='asis', echo=FALSE}
+
+nsi_hit6_lm <- lm(NSI_TotalScore~HIT6_Score*NSI_F2_Cognative ,data = master_set)
+```
+
+
+
+```{r, results='asis', echo=FALSE}
+tab_model(nsi_hit6_lm, title = "NSI Total Score, HIT6, And NSI COGNATIVE")
+```
+
+
+
+
+### NSI and PHQ9
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= PHQ9_Score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="PHQ9 Score")+
+  ggtitle("Correlation Between NSI Total, PHQ9 Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~PHQ9_Score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, PHQ9 and NSI AFFECTIVE")
+```
+
+### NSI and PHQ8
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= phq8_tot_score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="PHQ8 Score")+
+  ggtitle("Correlation Between NSI Total, PHQ8 Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~phq8_tot_score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, PHQ8 and NSI AFFECTIVE")
+```
+
+### NSI and GAD7
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= GAD_Score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="GAD7 Score")+
+  ggtitle("Correlation Between NSI Total, GAD7 Total and NSI AFFECTIVE")
+```
+
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~GAD_Score*NSI_F3_Affective ,data = master_set), title= "NSI Total Score, GAD7, and NSI Affective")
+```
+
+### NSI and ISI
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= ISI_Score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="ISI Score")+
+  ggtitle("Correlation Between NSI Total, ISI Total and NSI AFFECTIVE")
+```
+
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~ISI_Score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, ISI and NSI AFFECTIVE")
+```
+
+### NSI and PCL5
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= pcl520_tot_score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="PCL5 Score")+
+  ggtitle("Correlation Between NSI Total, PCL5 Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~pcl520_tot_score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, PCL5 and NSI AFFECTIVE")
+```
+
+### NSI and PCLM
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= pclm_tot_score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="PHQ8 Score")+
+  ggtitle("Correlation Between NSI Total, PCLM Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~pclm_tot_score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, PCLM and NSI AFFECTIVE")
+```
+
+### NSI and ABC
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= abc_tot_score, fill= NSI_F1_Vestibular))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="ABC Score")+
+  ggtitle("Correlation Between NSI Total, PHQ8 Total and NSI VESTIBULAR")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~abc_tot_score*NSI_F1_Vestibular ,data = master_set), title = "NSI Total Score, ABC, and NSI VESTIBULAR")
+```
+
+### NSI and DHI
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= dhi_tot_score, fill= NSI_F1_Vestibular))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="DHI Score")+
+  ggtitle("Correlation Between NSI Total, PHQ8 Total and NSI VESTIBULAR")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~dhi_tot_score*NSI_F1_Vestibular ,data = master_set), title = "NSI Total Score, DHI and NSI VESTIBULAR")
+```
+
+
+### NSI and EPWORTH
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= epworth_tot_score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="EPWORTH Score")+
+  ggtitle("Correlation Between NSI Total, EPWORTH Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~epworth_tot_score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, Epworth and NSI AFFECTIVE")
+```
+
+
+### NSI and QOL
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= qol_total, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="WHOQOL Score")+
+  ggtitle("Correlation Between NSI Total, WHOQOL Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~qol_total*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, WHOQOL and NSI AFFECTIVE")
+```
+
+### NSI and AUDIT
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+master_set%>%
+  filter(NSI_Validity_10 != "NA")%>%
+  ggplot(mapping = aes(x=NSI_TotalScore, y= AUDIT_Score, fill= NSI_F3_Affective))+
+  geom_tile()+
+  labs(x="NSI Total Score", y="AUDIT Score")+
+  ggtitle("Correlation Between NSI Total, AUDIT Total and NSI AFFECTIVE")
+```
+
+```{r, results='asis', echo=FALSE}
+tab_model(lm(NSI_TotalScore~AUDIT_Score*NSI_F3_Affective ,data = master_set), title = "NSI Total Score, AUDIT and NSI AFFECTIVE")
+```
+
+
+### Heat Map
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+corrplot((cor(master_matrix[,1:6], master_matrix[,7:18], use = "pairwise.complete.obs")), method = "color", title = "NSI values Correlated against Self Report Survey Scores", sig.level = 0.05,  insig = "label_sig" )
+```
+
+
+
+## Demographics{.tabset .tabset-fade .tabset-pills}
+
+### Plot
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(demo, mapping = aes(x=Age))+
+  geom_histogram(fill= "dodgerblue4")+
+  labs(x= "Age", y= "Count")+
+  ggtitle("Age Distribution of Self Reports Population")
+
+```
+
+
+### Service Branch
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(demo%>%
+  group_by(SponServAgg)%>%
+  dplyr::summarise(count= n())%>%
+  arrange(desc(count))%>%
+     adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+, caption = "Sponsor Service Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### Gender
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(
+demo%>%
+  group_by(Gender)%>%
+  dplyr::summarise(count= n())%>%
+  arrange(desc(count))%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+
+, caption = "Gender Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### Race
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(demo%>%
+  group_by(Race)%>%
+  dplyr::summarise(count= n())%>%
+  arrange(desc(count))%>%
+     adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+, caption = "Race Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### Marital Status
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(
+demo%>%
+  group_by(Marital_Stat)%>%
+  dplyr::summarise(count= n())%>%
+  arrange(desc(count))%>%
+   adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+, caption = "Marital Status Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+### BenCat
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(demo%>%
+  group_by(BenCatCom)%>%
+  dplyr::summarise(count= n())%>%
+  arrange(desc(count))%>%
+     adorn_totals("row")%>%
+ adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 2) %>%
+   adorn_ns()
+, caption = "BENCAT Counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+

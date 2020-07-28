@@ -1,0 +1,543 @@
+---
+title: "bhdp"
+author: "Awais Farooq"
+date: "4/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(dplyr)
+library(ggpubr)
+library(kableExtra)
+library(Hmisc)
+library(ggpubr)
+library(corrplot)
+library(rstatix)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+memory.limit(120000)
+
+#Load data set
+
+bhdp <- read.csv("DEID_BHDP_TBI_Surveys.csv", header = TRUE, sep= ",")
+
+bamc <- read.csv("BAMC_NSIComp_Manip.csv", header =  TRUE, sep = ",")
+
+nicoe <- read.csv("NICOE_data_limitedCols_DEID.csv", header = TRUE, sep = ",")
+
+names(nicoe)[2] <- "parent_dmis_key_name"
+
+nicoesubset <- nicoe[, c(217, 1:2, 19:20, 54,63,70, 71:94, 115, 143, 159, 170, 196)]
+
+bhdp[ bhdp == 888 ] <- NA
+
+bhdp$NSI.GuidanceText_V1 <- NULL
+
+bhdp[,1:139] <- sapply(bhdp[,1:139],as.character)
+bhdp[,1:139] <- sapply(bhdp[,1:139],as.numeric)
+
+
+###SUM SCORES FOR ORIGINAL BHDP DATA
+
+
+#Hit
+bhdp<- bhdp %>%
+  mutate(HIT6_Score = select(., 23:29) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,23:29])))%>%
+  select(HIT6_Score, everything())
+
+#phq9
+bhdp<- bhdp %>%
+  mutate(PHQ9_Score = select(., 31:39) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,31:39])))%>%
+  select(PHQ9_Score, everything())
+
+#audit
+bhdp<- bhdp%>%
+  mutate(AUDIT_Score = select(., 49:58) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,49:58])))%>%
+  select(AUDIT_Score, everything())
+
+
+
+#ISI
+bhdp<- bhdp%>%
+  mutate(ISI_Score = select(., 85:91) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,85:91])))%>%
+  select(ISI_Score, everything())
+
+
+#GAD
+bhdp<- bhdp%>%
+  mutate(GAD_Score = select(., 93:99) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,93:99])))%>%
+  select(GAD_Score, everything())
+
+#PCL
+
+bhdp<- bhdp%>%
+  mutate(pcl520_tot_score = select(., 101:122) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,101:122])))%>%
+  select(pcl520_tot_score, everything())
+
+#QOL
+
+#NSI vestibular
+
+bhdp<- bhdp %>%
+  mutate(NSI_F1_Vestibular = select(., c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')) %>% rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')])))%>%
+  select(NSI_F1_Vestibular, everything())
+
+
+
+#NSI Cognative
+bhdp<- bhdp %>%
+  mutate(NSI_F2_Cognative = select(., c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')])))%>%
+  select(NSI_F2_Cognative, everything())    
+
+
+
+#NSI Affective
+bhdp<- bhdp %>%
+  mutate(NSI_F3_Affective = select(., c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')])))%>%
+  select(NSI_F3_Affective, everything()) 
+
+
+
+#NSI Sensory
+bhdp<- bhdp %>%
+  mutate(NSI_F4_Sensory = select(., c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(bhdp[,c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')])))%>%
+  select(NSI_F4_Sensory, everything())  
+
+
+#NSI Validity
+
+bhdp<- bhdp %>%
+  mutate(NSI_Validity_10 = select(., c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')) %>% 
+           rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,c('NSI.Dizzy_V1','NSI.Balance_V1','NSI.Clumsy_V1','NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Noise_Sensitivity_V1','NSI.Hearing_Difficulty','NSI.Taste_Smell_Change_V1','NSI.Slow_Thinking_V1','NSI.Decision_Difficulty_V1')])))%>%
+  select(NSI_Validity_10, everything())  
+
+
+
+
+#NSI total
+bhdp<- bhdp %>%
+  mutate(NSI_TotalScore = select(., 12:33) %>% rowSums(na.rm = TRUE)*NA^!rowSums(!is.na(bhdp[,12:33])))%>%
+  select(NSI_TotalScore, everything())
+
+
+bhdp_sub <-  (bhdp[, c(160,154, 156, 159, 1:12 )])  
+
+
+## NSI factor scores in NICOE data
+
+#NSI vestibular
+nicoesubset<- nicoesubset %>%
+  mutate(NSI_F1_Vestibular = select(., c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoesubset[,c('NSI.Clumsy_V1','NSI.Dizzy_V1', 'NSI.Balance_V1')])))%>%
+  select(NSI_F1_Vestibular, everything())
+
+
+
+#NSI Cognative
+nicoesubset<- nicoesubset %>%
+  mutate(NSI_F2_Cognative = select(., c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoesubset[,c('NSI.Distracted_V1','NSI.Forgetfulness_V1','NSI.Decision_Difficulty_V1','NSI.Slow_Thinking_V1')])))%>%
+  select(NSI_F2_Cognative, everything())    
+
+
+
+#NSI Affective
+nicoesubset<- nicoesubset %>%
+  mutate(NSI_F3_Affective = select(., c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoesubset[,c('NSI.Fatigue_V1','NSI.Sleep_Difficulty_V1','NSI.Anxious_V1','NSI.Depressed_V1','NSI.Irritability_V1', 'NSI.Overwhelmed_V1')])))%>%
+  select(NSI_F3_Affective, everything()) 
+
+
+
+
+#NSI Sensory
+nicoesubset<- nicoesubset %>%
+  mutate(NSI_F4_Sensory = select(., c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')) %>% 
+           rowMeans(na.rm = TRUE)*NA^!rowMeans(!is.na(nicoesubset[,c('NSI.Headaches_V1', 'NSI.Nausea_V1','NSI.Vision_Problems_V1','NSI.Light_Sensitivity_V1','NSI.Noise_Sensitivity_V1','NSI.Numbness_V1','NSI.Taste_Smell_Change_V1')])))%>%
+  select(NSI_F4_Sensory, everything())  
+
+
+
+nicoesubset[,13:34] <- NULL
+
+##rename IDs for other dataframes
+
+names(bamc)[9] <- "SubjectID"
+
+
+nicoe_bhdp <-merge(bhdp_sub, nicoesubset, all = TRUE)
+
+total <- merge(nicoe_bhdp, bamc, all= TRUE)
+
+total_sub <- total[, c(1:15, 17:22)]
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+total_sub$NSI_TotalScore[total_sub$NSI_TotalScore<0 | total_sub$NSI_TotalScore>88] <- NA
+total_sub$HIT6_Score[total_sub$HIT6_Score<36 | total_sub$HIT6_Score>78] <- NA
+total_sub$PHQ9_Score[total_sub$PHQ9_Score<0 | total_sub$PHQ9_Score>27] <- NA
+total_sub$ISI_Score[total_sub$ISI_Score<0 | total_sub$ISI_Score>28] <- NA
+total_sub$GAD_Score[total_sub$GAD_Score<0 | total_sub$GAD_Score>15] <- NA
+total_sub$AUDIT_Score[total_sub$AUDIT_Score<0 | total_sub$AUDIT_Score>40] <- NA
+total_sub$abc_tot_score[total_sub$abc_tot_score<0 | total_sub$abc_tot_score>100] <- NA
+total_sub$dhi_tot_score[total_sub$dhi_tot_score<0 | total_sub$dhi_tot_score>100] <- NA    
+total_sub$epworth_tot_score[total_sub$epworth_tot_score<0 | total_sub$epworth_tot_score>24] <- NA    
+total_sub$pcl520_tot_score[total_sub$pcl520_tot_score<0 | total_sub$pcl520_tot_score>80] <- NA
+total_sub$pclm_tot_score[total_sub$pclm_tot_score<17 | total_sub$pclm_tot_score>85] <- NA
+
+
+total_sub$start_date <- as.POSIXct(total_sub$start_date,format="%m/%d/%Y")
+
+total_sub_filter <-  total_sub%>%
+  filter(NSI_Validity_10<22)
+
+total_sub_1 <- total_sub_filter%>%drop_na(NSI_TotalScore)
+
+residuals <-  rcorr(as.matrix(total_sub_1[,c(4:9, 10:21 )]))
+```
+
+**The Behavioral Health Data Portal (BHDP) misson statement can be summarized as; Improving behavioral health clincal care and risk tracking via standardized data collection disseminated in real time for provioder viewership, supporting evidence based practices and outcomes data for clinical practice, and simplication of data sources via integration of relavent data sources across the Army Medical department. With this background in consideration we can begin to articulate the purposes of this analysis. Multiple standardized survey assements were administered to Service Memebers(SMs) in this analyis from March 10th 2009 to August 6th 2019. In total 13 total Survey types have been gathered from various data sources. Data pulls occured from the BHDP dataset which contains almost 747,000 observations, BAMC which contains 5143 observations and NICOE which contained 8562 observations.**
+
+**Certain considerations are to be made when analyzing survey data. Cut scores are applied to all data to filter surveys that deemed to be clinically inacurate. An example of this would be filtering out surveys with a NSI Validity 10 score of 22 or more. This measurement alone drops the total amount of observations down 16871. From this we can find 11176 unique Service member IDs. Building upon guidance from prior analysis, efforts will be made to further correlate all survey analysis with the presnce of NSI Total Scores from a corresponding observation. Correlating datapoints is considered more "valid" if the two datapoints share the same date of occurence. Thus total N sizes for each survey will vary greatly.**  
+
+
+## Surveys{.tabset .tabset-fade .tabset-pills}
+
+### Survey Counts
+
+**Our first approach in this analysis is to count all the number of surveys possible given our cut score parameters**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_filter %>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    select(NSI_TotalScore:PSQI_Score), caption = "Survey counts", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**Because there are fewer total NSI total scores then valid NSI validity scores, the data is further filtered down to only represent the amount of total NSI total Scores as that is being used as key endpoint of comparison for all other surveys. The counts after this filter are rexamined below**
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1 %>%
+  summarise_all(funs(sum(!is.na(.))))%>%
+    select(NSI_TotalScore:PSQI_Score), caption = "Survey counts filtered", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+**For the remaining analysis This subset will be utilized to caluclate means and correlation values. Of note, HIT6 and PCLM have the highest NON NSI count thus far in the analysis**
+
+
+### Survey Summary
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+knitr::kable(summary(total_sub_1, na.rm=TRUE), caption = "Survey Summaries", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+
+
+
+## Correlation Matrices
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(residuals$r
+, caption = "Correlation matrixes", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(residuals$n
+, caption = "Correlation matrices count", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(residuals$p
+, caption = "Correlation matricies p value", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+
+## Individual Correlations
+
+**The following represent small tables showing individual correlations and their corresponding p values**
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(pcl520_tot_score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "pcl520_tot_score"
+  )
+, caption = "NSI vs PCL520", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$pcl520_tot_score)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(HIT6_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "HIT6_Score"
+  )
+, caption = "NSI vs HIT6", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$HIT6_Score)
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(dhi_tot_score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "dhi_tot_score"
+  )
+, caption = "NSI vs DHI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$dhi_tot_score)
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(pclm_tot_score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "pclm_tot_score"
+  )
+, caption = "NSI vs PCLM", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$pclm_tot_score)
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(GAD_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "GAD_Score"
+  )
+, caption = "NSI vs GAD", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$GAD_Score)
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(PHQ9_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "PHQ9_Score"
+  )
+, caption = "NSI vs PHQ9", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$PHQ9_Score)
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(ISI_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "ISI_Score"
+  )%>%p_round(digits = 3)
+, caption = "NSI vs ISI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$ISI_Score)
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(AUDIT_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "AUDIT_Score"
+  )
+, caption = "NSI vs AUDIT", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$AUDIT_Score)
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(abc_tot_score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "abc_tot_score"
+  )
+, caption = "NSI vs ABC", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$abc_tot_score)
+
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(epworth_tot_score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "epworth_tot_score"
+  )
+, caption = "NSI vs epworth", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$epworth_tot_score)
+
+
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+knitr::kable(total_sub_1%>%
+  filter(PSQI_Score !="NA")%>%
+  filter(NSI_TotalScore != "NA")%>%
+  cor_test(
+    vars = "NSI_TotalScore",
+    vars2 = "PSQI_Score"
+  )
+, caption = "NSI vs PSQI", digits = 3)%>%
+    kable_styling(bootstrap_options =  "striped", full_width= TRUE, position = "center")%>%
+  kable_styling(latex_options = "hold_position")%>%
+  scroll_box(width = "100%", height = "500px")
+
+cor.test(total_sub_1$NSI_TotalScore, total_sub_1$PSQI_Score)
+
+```
+
+## Multiple Linear Regression
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+summary(lm(NSI_TotalScore~GAD_Score+PHQ9_Score, data = total_sub_1))
+
+
+summary(lm(NSI_TotalScore~ISI_Score+HIT6_Score, data = total_sub_1))
+
+
+summary(lm(NSI_TotalScore~AUDIT_Score+PHQ9_Score, data = total_sub_1))
+
+
+```
+
+
+
+## cor plot
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+corrplot((cor(total_sub_1[,4:9], total_sub_1[,10:15 ], use = "pairwise.complete.obs")),type = "upper", order = "hclust")
+
+corrplot((cor(total_sub_1[,4:9], total_sub_1[,16:21 ], use = "pairwise.complete.obs")),type = "upper", order = "hclust")
+```
